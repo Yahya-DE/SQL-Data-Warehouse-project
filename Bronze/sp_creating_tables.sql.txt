@@ -1,0 +1,139 @@
+/*
+============================================================
+ Script Name : sp_creating_tables.sql
+ Layer       : Bronze
+ Purpose     : 
+    - Create raw (as-is) tables for CRM and ERP source systems
+    - Preserve source data structure without transformations
+    - Tables are dropped and recreated on each execution
+
+ Notes:
+    - Date fields from source systems are stored as INT (YYYYMMDD)
+      to reflect original source format in the Bronze layer.
+    - No primary keys or constraints are applied at this stage by design.
+============================================================
+*/
+
+CREATE OR ALTER PROCEDURE Bronze.sp_creating_tables
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRY
+        DECLARE 
+            @start_time DATETIME2(3),
+            @end_time   DATETIME2(3);
+
+        SET @start_time = SYSDATETIME();
+
+        /* =====================================================
+           CRM - CUSTOMER INFORMATION
+        ===================================================== */
+        IF OBJECT_ID('Bronze.crm_cust_info', 'U') IS NOT NULL
+            DROP TABLE Bronze.crm_cust_info;
+
+        CREATE TABLE Bronze.crm_cust_info
+        (
+            cst_id             INT,
+            cst_key            VARCHAR(50),
+            cst_firstname      VARCHAR(50),
+            cst_lastname       VARCHAR(50),
+            cst_marital_status VARCHAR(50),
+            cst_gndr           VARCHAR(10),
+            cst_create_date    DATE
+        );
+
+        /* =====================================================
+           CRM - PRODUCT INFORMATION
+        ===================================================== */
+        IF OBJECT_ID('Bronze.crm_prd_info', 'U') IS NOT NULL
+            DROP TABLE Bronze.crm_prd_info;
+
+        CREATE TABLE Bronze.crm_prd_info
+        (
+            prd_id       INT,
+            prd_key      VARCHAR(100),
+            prd_nm       VARCHAR(100),
+            prd_cost     DECIMAL(10,2),
+            prd_line     VARCHAR(50),
+            prd_start_dt DATE,
+            prd_end_dt   DATE
+        );
+
+        /* =====================================================
+           CRM - SALES DETAILS
+           Dates are stored as INT (YYYYMMDD) as received from source
+        ===================================================== */
+        IF OBJECT_ID('Bronze.crm_sales_details', 'U') IS NOT NULL
+            DROP TABLE Bronze.crm_sales_details;
+
+        CREATE TABLE Bronze.crm_sales_details
+        (
+            sls_ord_num  VARCHAR(50),
+            sls_prd_key  VARCHAR(50),
+            sls_cust_id  INT,
+            sls_order_dt INT, -- YYYYMMDD
+            sls_ship_dt  INT, -- YYYYMMDD
+            sls_due_dt   INT, -- YYYYMMDD
+            sls_sales    DECIMAL(12,2),
+            sls_quantity INT,
+            sls_price    DECIMAL(10,2)
+        );
+
+        /* =====================================================
+           ERP - CUSTOMER
+        ===================================================== */
+        IF OBJECT_ID('Bronze.erp_cust_az12', 'U') IS NOT NULL
+            DROP TABLE Bronze.erp_cust_az12;
+
+        CREATE TABLE Bronze.erp_cust_az12
+        (
+            cid   VARCHAR(50),
+            bdate DATE,
+            gen   VARCHAR(10)
+        );
+
+        /* =====================================================
+           ERP - LOCATION
+        ===================================================== */
+        IF OBJECT_ID('Bronze.erp_loc_a101', 'U') IS NOT NULL
+            DROP TABLE Bronze.erp_loc_a101;
+
+        CREATE TABLE Bronze.erp_loc_a101
+        (
+            cid   VARCHAR(50),
+            cntry VARCHAR(50)
+        );
+
+        /* =====================================================
+           ERP - PRODUCT CATEGORY
+        ===================================================== */
+        IF OBJECT_ID('Bronze.erp_px_cat_g1v2', 'U') IS NOT NULL
+            DROP TABLE Bronze.erp_px_cat_g1v2;
+
+        CREATE TABLE Bronze.erp_px_cat_g1v2
+        (
+            id          VARCHAR(50),
+            cat         VARCHAR(50),
+            subcat      VARCHAR(50),
+            maintenance VARCHAR(50)
+        );
+
+        SET @end_time = SYSDATETIME();
+
+        PRINT '=========================================';
+        PRINT 'Bronze tables created successfully';
+        PRINT 'Execution time (seconds): '
+              + CAST(DATEDIFF(SECOND, @start_time, @end_time) AS VARCHAR);
+        PRINT '=========================================';
+
+    END TRY
+    BEGIN CATCH
+        PRINT '=========================================';
+        PRINT 'Error Line   : ' + CAST(ERROR_LINE() AS VARCHAR);
+        PRINT 'Error Number : ' + CAST(ERROR_NUMBER() AS VARCHAR);
+        PRINT 'Error Message: ' + ERROR_MESSAGE();
+        PRINT '=========================================';
+    END CATCH
+END;
+GO
