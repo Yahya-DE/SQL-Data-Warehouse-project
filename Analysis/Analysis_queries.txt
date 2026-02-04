@@ -1,0 +1,97 @@
+/*
+============================================================
+ Script Name : Analysis_queries.sql
+ Layer       : Gold
+ Purpose     :
+    - Perform key analyses on Gold layer
+    - Includes category summary, top customers, pricing checks,
+      sales distribution, and stagnant products
+ Notes:
+    - Ensure column names are consistent and typo-free
+    - Designed for manual exploration and reporting
+============================================================
+*/
+
+-- ===============================
+-- 1. Category summary
+-- ===============================
+SELECT 
+    p.category AS CategoryName,
+    SUM(s.sales) AS TotalSales,
+    COUNT(s.quantity) AS NumberOfSales,   -- Fixed typo "qountity"
+    AVG(s.price) AS AveragePrice           -- Fixed typo "AvragePrice"
+FROM Gold.v_fact_sales s
+LEFT JOIN Gold.v_dim_product p
+    ON s.product_key = p.product_key
+GROUP BY p.category;
+
+-- ===============================
+-- 2. Top 10 customers by number of sales
+-- ===============================
+SELECT TOP 10
+    CONCAT(c.first_name,' ',c.last_name) AS FullName,
+    c.country,
+    COUNT(*) AS NumberOfOrders
+FROM Gold.v_fact_sales s
+LEFT JOIN Gold.v_dim_cust c
+    ON s.customer_id = c.customer_id
+GROUP BY c.customer_id,
+         CONCAT(c.first_name,' ',c.last_name),
+         c.country
+ORDER BY NumberOfOrders DESC;
+
+-- ===============================
+-- 3. Products with cost higher than price
+-- ===============================
+SELECT 
+    p.product_name,
+    p.product_cost,
+    s.price
+FROM Gold.v_fact_sales s
+LEFT JOIN Gold.v_dim_product p
+    ON s.product_key = p.product_key
+WHERE s.price < p.product_cost;
+
+-- ===============================
+-- 4. Total Sales distribution by Gender & Category
+-- ===============================
+SELECT 
+    c.customer_gender,
+    p.category,
+    SUM(s.sales) AS TotalSales,
+    ROUND(
+        SUM(s.sales) * 1.0 / (
+            SELECT SUM(fs.sales)*1.0
+            FROM Gold.v_fact_sales fs
+            LEFT JOIN Gold.v_dim_product dp
+                ON fs.product_key = dp.product_key
+            WHERE dp.category = p.category
+        ) * 100, 2
+    ) AS PercentOfCategoryByGender   -- Fixed typo "PrecentOfCategoryByGender"
+FROM Gold.v_fact_sales s
+LEFT JOIN Gold.v_dim_cust c
+    ON s.customer_id = c.customer_id
+LEFT JOIN Gold.v_dim_product p
+    ON s.product_key = p.product_key
+WHERE c.customer_gender != 'n/a'
+GROUP BY c.customer_gender, p.category
+ORDER BY TotalSales DESC;
+
+-- ===============================
+-- 5. Stagnant products (no sales and still active)
+-- ===============================
+SELECT 
+    product_key,
+    product_name,
+    category,
+    sub_category,
+    product_cost,
+    start_date
+FROM Gold.v_dim_product p
+WHERE end_date IS NULL
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM Gold.v_fact_sales s 
+      WHERE s.product_key = p.product_key
+  )
+ORDER BY product_cost DESC;
